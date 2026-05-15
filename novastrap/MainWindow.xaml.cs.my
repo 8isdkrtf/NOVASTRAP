@@ -1,0 +1,361 @@
+using System;
+using System.Collections.Generic;
+using System.Collections.ObjectModel;
+using System.Diagnostics;
+using System.IO;
+using System.Linq;
+using System.Text;
+using System.Windows;
+using System.Windows.Controls;
+using Microsoft.Win32;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
+
+namespace Novastrap
+{
+    public partial class MainWindow : Window
+    {
+        private ObservableCollection<FFlagEntry> _flags = new ObservableCollection<FFlagEntry>();
+        private List<FastFlagProfile> _profiles = new List<FastFlagProfile>();
+        private string _profilesPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Novastrap", "profiles.json");
+        private string _currentProfileName = "Default";
+
+        public MainWindow()
+        {
+            InitializeComponent();
+            InitializeApp();
+        }
+
+        private void InitializeApp()
+        {
+            FlagsGrid.ItemsSource = _flags;
+            
+            Directory.CreateDirectory(Path.GetDirectoryName(_profilesPath));
+            LoadAllProfiles();
+            
+            // Примеры флагов для демонстрации
+            _flags.Add(new FFlagEntry { Key = "FFlagDebugGraphicsPreferVulkan", Value = "True", Type = "Boolean" });
+            _flags.Add(new FFlagEntry { Key = "DFIntTaskSchedulerTargetFps", Value = "144", Type = "Number" });
+        }
+
+        private void LoadAllProfiles()
+        {
+            if (File.Exists(_profilesPath))
+            {
+                var json = File.ReadAllText(_profilesPath);
+                _profiles = JsonConvert.DeserializeObject<List<FastFlagProfile>>(json) ?? new List<FastFlagProfile>();
+            }
+            
+            if (_profiles.Count == 0)
+            {
+                _profiles.Add(new FastFlagProfile { Name = "Default", Flags = new Dictionary<string, object>() });
+                SaveProfiles();
+            }
+            
+            ProfileList.Items.Clear();
+            foreach (var profile in _profiles)
+                ProfileList.Items.Add(profile.Name);
+            
+            ProfileList.SelectedIndex = 0;
+        }
+
+        private void SaveProfiles()
+        {
+            var json = JsonConvert.SerializeObject(_profiles, Formatting.Indented);
+            File.WriteAllText(_profilesPath, json);
+        }
+
+        private void ProfileList_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (ProfileList.SelectedItem == null) return;
+            _currentProfileName = ProfileList.SelectedItem.ToString();
+            LoadProfile(_currentProfileName);
+        }
+
+        private void LoadProfile(string name)
+        {
+            var profile = _profiles.FirstOrDefault(p => p.Name == name);
+            if (profile == null) return;
+            
+            _flags.Clear();
+            foreach (var flag in profile.Flags)
+            {
+                string valueStr = flag.Value.ToString();
+                string type = "String";
+                if (flag.Value is bool) type = "Boolean";
+                else if (flag.Value is int || flag.Value is double || flag.Value is float) type = "Number";
+                
+                _flags.Add(new FFlagEntry { Key = flag.Key, Value = valueStr, Type = type });
+            }
+        }
+
+        private void SaveCurrentProfile()
+        {
+            var profile = _profiles.FirstOrDefault(p => p.Name == _currentProfileName);
+            if (profile == null) return;
+            
+            var flagsDict = new Dictionary<string, object>();
+            foreach (var flag in _flags)
+            {
+                object value = flag.Value;
+                if (flag.Type == "Boolean") value = bool.Parse(flag.Value);
+                else if (flag.Type == "Number")
+                {
+                    if (int.TryParse(flag.Value, out int intVal)) value = intVal;
+                    else if (double.TryParse(flag.Value, out double dblVal)) value = dblVal;
+                }
+                flagsDict[flag.Key] = value;
+            }
+            
+            profile.Flags = flagsDict;
+            SaveProfiles();
+        }
+
+        private void ApplyFlagsToRoblox()
+        {
+            var settings = new JObject();
+            foreach (var flag in _flags)
+            {
+                object value = flag.Value;
+                if (flag.Type == "Boolean") value = bool.Parse(flag.Value);
+                else if (flag.Type == "Number")
+                {
+                    if (int.TryParse(flag.Value, out int intVal)) value = intVal;
+                    else if (double.TryParse(flag.Value, out double dblVal)) value = dblVal;
+                }
+                settings[flag.Key] = JToken.FromObject(value);
+            }
+            
+            string robloxSettingsPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), 
+                                                       "Roblox", "ClientSettings", "ClientAppSettings.json");
+            Directory.CreateDirectory(Path.GetDirectoryName(robloxSettingsPath));
+            File.WriteAllText(robloxSettingsPath, settings.ToString(Formatting.Indented), Encoding.UTF8);
+        }
+
+        private void LaunchRobloxBtn_Click(object sender, RoutedEventArgs e)
+        {
+            SaveCurrentProfile();
+            ApplyFlagsToRoblox();
+            
+            string robloxPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), 
+                                              "Roblox", "Versions");
+            if (Directory.Exists(robloxPath))
+            {
+                var versionFolders = Directory.GetDirectories(robloxPath);
+                var latest = versionFolders.OrderByDescending(f => File.GetLastWriteTime(f)).FirstOrDefault();
+                if (latest != null)
+                {
+                    string playerExe = Path.Combine(latest, "RobloxPlayerBeta.exe");
+                    if (File.Exists(playerExe))
+                    {
+                        Process.Start(playerExe);
+                        MessageBox.Show("Roblox запущен с твоими настройками!", "Успех", MessageBoxButton.OK, MessageBoxImage.Information);
+                        return;
+                    }
+                }
+            }
+            
+            Process.Start("roblox://");
+        }
+
+        private void AddFlagBtn_Click(object sender, RoutedEventArgs e)
+        {
+            var dialog = new InputDialog("Новый флаг", "Введите название флага");
+            if (dialog.ShowDialog() == true && !string.IsNullOrEmpty(dialog.Answer))
+            {
+                _flags.Add(new FFlagEntry { Key = dialog.Answer, Value = "True", Type = "Boolean" });
+            }
+        }
+
+        private void RemoveFlag_Click(object sender, RoutedEventArgs e)
+        {
+            var button = sender as Button;
+            var flag = button?.DataContext as FFlagEntry;
+            if (flag != null) _flags.Remove(flag);
+        }
+
+        private void SaveFlagsBtn_Click(object sender, RoutedEventArgs e)
+        {
+            SaveCurrentProfile();
+            MessageBox.Show("Профиль сохранён!", "Сохранено", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+
+        private void ResetFlagsBtn_Click(object sender, RoutedEventArgs e)
+        {
+            string settingsPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), 
+                                                "Roblox", "ClientSettings", "ClientAppSettings.json");
+            if (File.Exists(settingsPath)) File.Delete(settingsPath);
+            MessageBox.Show("Все флаги Roblox сброшены", "Сброс", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+
+        private void NewProfileBtn_Click(object sender, RoutedEventArgs e)
+        {
+            var dialog = new InputDialog("Новый профиль", "Введите название профиля");
+            if (dialog.ShowDialog() == true && !string.IsNullOrEmpty(dialog.Answer))
+            {
+                _profiles.Add(new FastFlagProfile { Name = dialog.Answer, Flags = new Dictionary<string, object>() });
+                SaveProfiles();
+                ProfileList.Items.Add(dialog.Answer);
+            }
+        }
+
+        private void DeleteProfileBtn_Click(object sender, RoutedEventArgs e)
+        {
+            if (ProfileList.SelectedItem == null || ProfileList.SelectedItem.ToString() == "Default") return;
+            _profiles.RemoveAll(p => p.Name == ProfileList.SelectedItem.ToString());
+            SaveProfiles();
+            LoadAllProfiles();
+        }
+
+        private void ImportPresetBtn_Click(object sender, RoutedEventArgs e)
+        {
+            var presetDialog = new ComboBoxDialog("Выбери пресет", new[] { "Производительность (30 FPS)", "Максимум графики", "Режим разработчика", "FPS Unlocker (360 FPS)" });
+            if (presetDialog.ShowDialog() == true)
+            {
+                var preset = new Dictionary<string, object>();
+                switch (presetDialog.SelectedItem)
+                {
+                    case "Производительность (30 FPS)":
+                        preset["DFIntTaskSchedulerTargetFps"] = 30;
+                        break;
+                    case "Максимум графики":
+                        preset["DFIntTaskSchedulerTargetFps"] = 240;
+                        preset["FFlagDebugGraphicsPreferVulkan"] = true;
+                        break;
+                    case "Режим разработчика":
+                        preset["FFlagDebugDevConsole"] = true;
+                        break;
+                    case "FPS Unlocker (360 FPS)":
+                        preset["DFIntTaskSchedulerTargetFps"] = 360;
+                        break;
+                }
+                
+                _flags.Clear();
+                foreach (var kvp in preset)
+                {
+                    string type = kvp.Value is bool ? "Boolean" : "Number";
+                    _flags.Add(new FFlagEntry { Key = kvp.Key, Value = kvp.Value.ToString(), Type = type });
+                }
+                SaveCurrentProfile();
+            }
+        }
+
+        private void InjectFFlagBtn_Click(object sender, RoutedEventArgs e)
+        {
+            string code = FFlagCodeBox.Text;
+            if (string.IsNullOrEmpty(code))
+            {
+                MessageBox.Show("Вставь код FFlags", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+            
+            try
+            {
+                if (code.Trim().StartsWith("{"))
+                {
+                    var parsed = JObject.Parse(code);
+                    foreach (var prop in parsed.Properties())
+                    {
+                        string value = prop.Value.ToString();
+                        _flags.Add(new FFlagEntry { Key = prop.Name, Value = value, Type = "String" });
+                    }
+                }
+                else
+                {
+                    var lines = code.Split('\n');
+                    foreach (var line in lines)
+                    {
+                        if (line.Contains('='))
+                        {
+                            var parts = line.Split('=');
+                            if (parts.Length == 2)
+                            {
+                                string key = parts[0].Trim();
+                                string value = parts[1].Trim().Trim('"', '\'', ';');
+                                _flags.Add(new FFlagEntry { Key = key, Value = value, Type = "String" });
+                            }
+                        }
+                    }
+                }
+                
+                SaveCurrentProfile();
+                MessageBox.Show($"Инжектировано {_flags.Count} флагов!", "Успех", MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Ошибка: {ex.Message}", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+    }
+
+    // Вспомогательные классы
+    public class FFlagEntry
+    {
+        public string Key { get; set; }
+        public string Value { get; set; }
+        public string Type { get; set; }
+    }
+
+    public class FastFlagProfile
+    {
+        public string Name { get; set; }
+        public Dictionary<string, object> Flags { get; set; }
+    }
+
+    // Диалоговое окно ввода
+    public class InputDialog : Window
+    {
+        public string Answer { get; private set; }
+        
+        public InputDialog(string title, string prompt)
+        {
+            Title = title;
+            Width = 400;
+            Height = 150;
+            WindowStartupLocation = WindowStartupLocation.CenterOwner;
+            
+            var stack = new StackPanel();
+            stack.Margin = new Thickness(10);
+            stack.Children.Add(new TextBlock { Text = prompt, Foreground = System.Windows.Media.Brushes.White, Margin = new Thickness(0,0,0,10) });
+            var box = new TextBox { Margin = new Thickness(0,0,0,10) };
+            stack.Children.Add(box);
+            var btn = new Button { Content = "OK", Width = 80, Height = 30 };
+            btn.Click += (s, e) => { Answer = box.Text; DialogResult = true; };
+            stack.Children.Add(btn);
+            
+            Content = stack;
+            Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(30,30,46));
+            Foreground = System.Windows.Media.Brushes.White;
+        }
+    }
+
+    // Диалоговое окно выбора
+    public class ComboBoxDialog : Window
+    {
+        public string SelectedItem { get; private set; }
+        
+        public ComboBoxDialog(string title, string[] items)
+        {
+            Title = title;
+            Width = 350;
+            Height = 200;
+            WindowStartupLocation = WindowStartupLocation.CenterOwner;
+            
+            var stack = new StackPanel();
+            stack.Margin = new Thickness(10);
+            var combo = new ComboBox();
+            foreach (var item in items) combo.Items.Add(item);
+            combo.SelectedIndex = 0;
+            combo.Margin = new Thickness(0,0,0,10);
+            stack.Children.Add(combo);
+            
+            var btn = new Button { Content = "Выбрать", Width = 80, Height = 30 };
+            btn.Click += (s, e) => { SelectedItem = combo.SelectedItem?.ToString(); DialogResult = true; };
+            stack.Children.Add(btn);
+            
+            Content = stack;
+            Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(30,30,46));
+            Foreground = System.Windows.Media.Brushes.White;
+        }
+    }
+}
