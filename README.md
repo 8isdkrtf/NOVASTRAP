@@ -1,2 +1,5 @@
-# NOVASTRAP
-NovaStrap — приложение для Windows, которое изменяет Fast Flags в Roblox. Fast Flags — скрытые параметры, управляющие FPS, графикой, сетью и отладкой.  Что нужно для запуска: .NET 8.0 Runtime (скачать с сайта Microsoft). Никаких компиляторов или Visual Studio не требуется.
+NOVASTRAP
+NovaStrap — це застосунок для Windows, який змінює Fast Flags у Roblox. Fast Flags — це приховані параметри, що керують FPS, графікою, мережею та налагодженням.
+
+Що потрібно для запуску: .NET 8.0 Runtime (завантажити з сайту Microsoft). Жодних компіляторів або Visual Studio не потрібно.
+
