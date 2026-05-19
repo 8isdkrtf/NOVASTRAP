@@ -12,7 +12,7 @@
             <ColumnDefinition Width="*"/>
         </Grid.ColumnDefinitions>
         
-        <!-- БОКОВАЯ ПАНЕЛЬ (ПРОФИЛИ) -->
+        
         <Border Grid.Column="0" Background="#2D2D3D" CornerRadius="8" Margin="0,0,10,0">
             <StackPanel Margin="10">
                 <TextBlock Text="ПРОФИЛИ" Foreground="White" FontWeight="Bold" FontSize="16" Margin="0,0,0,10"/>
@@ -28,11 +28,11 @@
             </StackPanel>
         </Border>
         
-        <!-- ОСНОВНАЯ ОБЛАСТЬ -->
+        
         <Grid Grid.Column="1">
             <TabControl Background="#2D2D3D" BorderThickness="0">
                 
-                <!-- ВКЛАДКА FAST FLAGS -->
+                
                 <TabItem Header="FAST FLAGS" Background="#3D3D4D" Foreground="White">
                     <Grid Margin="10">
                         <Grid.RowDefinitions>
@@ -89,7 +89,7 @@
                     </Grid>
                 </TabItem>
                 
-                <!-- ВКЛАДКА FFLAG INJECT -->
+                
                 <TabItem Header="FFLAG INJECT" Background="#3D3D4D" Foreground="White">
                     <Grid Margin="10">
                         <Grid.RowDefinitions>

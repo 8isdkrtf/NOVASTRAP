@@ -1,0 +1,6 @@
+C:\Users\хз\Desktop\novastrap\publish\Novastrap.exe
+C:\Users\хз\Desktop\novastrap\publish\Novastrap.dll
+C:\Users\хз\Desktop\novastrap\publish\Novastrap.deps.json
+C:\Users\хз\Desktop\novastrap\publish\Novastrap.runtimeconfig.json
+C:\Users\хз\Desktop\novastrap\publish\Novastrap.pdb
+C:\Users\хз\Desktop\novastrap\publish\Newtonsoft.Json.dll
